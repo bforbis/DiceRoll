@@ -1,0 +1,100 @@
+#!/usr/bin/perl
+
+use v5.18;
+use warnings;
+no warnings "uninitialized";
+
+use POSIX;
+use Data::Dumper;
+use Term::ANSIColor qw(:constants);
+use Data::Printer { colored => 1 };
+
+my @dice = @ARGV;
+die Usage() unless @dice;
+my $lastindex = $#dice;
+my $modifier = $dice[$lastindex];
+
+# If last elt is x3, then that is 3 set rolls
+my $multiplier;
+if ($modifier && $modifier =~ /^x(\d+)/) {
+	$multiplier = $1;
+	pop @dice;
+
+	@dice = ((@dice) x $multiplier);
+}
+
+# Copy dice to numeric dice and strip off any modifiers
+my @numericdice = @{[@dice]};
+foreach my $roll (@numericdice) {
+	$roll =~ s/^(\d+).*$/$1/;
+}
+
+my @values = map{ceil(rand($_))} @numericdice;
+
+my @results;
+my $totaldamage;
+my $maxroll = 0;
+foreach (my $i = 0; $i < scalar @dice; $i++) {
+	$totaldamage += $values[$i];
+	$maxroll = $values[$i] if ($values[$i] > $maxroll);
+
+	my $die = $dice[$i];
+
+	# Allow for die with +x modifiers. This will add the modifier
+	# to the total damage of the die, and will calculate it in the total
+	# damage rolls of all the die.
+	if ($die =~ /.*\+(\d+)/) {
+		$values[$i] = sprintf(
+			'%s+%d=%d',
+			$values[$i],
+			$1,
+			($values[$i] + $1),
+		);
+		$totaldamage += $1;
+	}
+	push @results, {$dice[$i] => $values[$i]};
+}
+
+print "You just rolled a total of ";
+print RED $totaldamage;
+print RESET " with a max of ";
+print GREEN "$maxroll";
+say RESET "!!";
+
+p(@results);
+
+sub Usage {
+	my $message = 
+q{
+Usage:
+
+perl rolldice <dice>[s] [modifier]
+
+Description:
+Rolls a <dice>, or multiple <dice>, with an optional [modifier] in the form xN, where N is some number equivalent to the amount of dice to roll.
+
+Example:
+perl rolldice 20 20
+> This will roll two d20
+
+perl rolldice 20 x2
+> This will also roll two d20
+
+Dice Modifier Options:
+
+	Damage Types:
+	A letter can be added to a die to allow for a modifier to be attributed to the die roll.
+
+	Example: perl rolldice 20f
+	> This will roll a d20, with f (for freezing damage?)
+
+	Damage Modifiers:
+	A number can be added to a die to allow for the damage to be added after the die roll.
+
+	Example: perl rolldice 20+4
+	> This will roll a d20, and then add 4 to the die roll.
+
+};
+
+	die $message;
+}
